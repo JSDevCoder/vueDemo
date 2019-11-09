@@ -31,9 +31,12 @@ function ajax(options) {
         dataType: 'json',
         async: true,
         data: null,
+        params: null,
         header: null,
+        timeout: 5000,
         success: null,
-        error: null
+        error: null,
+        progress: null
     }
 
     for (let key in options) {
@@ -44,32 +47,60 @@ function ajax(options) {
 
     //如果为get请求，则添加时间戳，防止缓存 
     if (_default['type'] === 'get') {
-        let timeStamp = new Date().getTime();
-        _default['url'].indexOf('?') != -1 ? _default['url'] += '&' : _default['url'] += '?';
-        _default['url'] += '_=' + timeStamp;
+        if(!!_default['params'] && typeof _default['params'] === 'object'){
+            let keyArr = [];
+            for(let key in _default['params']){
+                keyArr.push(key + '=' + _default['params'][key])
+            }
+            _default['url'] += '?' + keyArr.join('&');
+        } 
+        console.log(_default['url'])
     }
 
+    // 发送请求
     let xhr = createXHR();
     xhr.open(_default['type'], _default['url'], _default['async'])
-    xhr.onreadystatechange = () => {
+    for(let key in _default['header']){
+        xhr.setRequestHeader(key, _default['header'][key]);
+    }
+    xhr.onprogress = (e) => {
+        console.log(e)
+        let data = {
+            loaded: e.loaded,
+            total: e.total,
+            readyState: xhr.readyState,
+            status: xhr.status
+        }
+        if(typeof _default['progress'] === 'function'){
+            _default['progress'].call(xhr, data)
+        }
+    }
+    xhr.send(_default['data'])
+    xhr.onload = () => {
+        let config = {
+            text: xhr.responseText,
+            statusText: xhr.statusText,
+            type: xhr.responseType,
+            url: xhr.responseURL
+        }
         if (/^2\d{2}$/.test(xhr.status)) {
-            if (xhr.readyState === 2) {
-                if (typeof _default['getHeader'] === 'function') {
-                    _default['getHeader'].call(xhr)
-                }
-            }
             if (xhr.readyState === 4) {
-                let value = xhr.responseText;
+                let resText = xhr.responseText
                 if (_default['dataType'] === 'json') {
-                    value = JSON.parse(value)
+                    resText = JSON.parse(resText)
                 }
                 if (typeof _default['success'] === 'function') {
-                    _default['success'].call(xhr, value)
+                    _default['success'].call(xhr, resText, config)
                 }
             }
         }
     }
-    xhr.send(_default['data'])
+    xhr.onerror = (e) => {
+        if(typeof _default['error'] === 'function'){
+            _default['error'].call(xhr, e, e.type)
+        }
+    }
+    
 }
 
 export default ajax;
